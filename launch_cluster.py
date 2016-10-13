@@ -12,8 +12,8 @@ cluster_config = ""  # ""source/cluster_creator/cluster_config.json"
 
 
 def check_configuration(config):
-    if not utility.check_config(config, "EMR", ["release_label", "software_installer_location", "genome_ref_location",
-                                                "star_ref_location"]):
+    if not utility.check_config(config, "EMR", ["release_label", "software_installer_location",
+                                                "genome_folder_location"]):
         return False
 
     if not utility.check_upload_config(config["EMR"], "upload_bootstrap_scripts", "bootstrap_scripts",
@@ -93,7 +93,7 @@ def build_command(config):
             if bootstrap_script == "install_software.sh":
                 bootstrap_action_args = [config["EMR"]["software_installer_location"]]
             elif bootstrap_script == "copy_reference.sh":
-                bootstrap_action_args = [config["EMR"]["genome_ref_location"], config["EMR"]["star_ref_location"]]
+                bootstrap_action_args = [config["EMR"]["genome_folder_location"]]
 
             bootstrap_actions.append({
                 "Name": bootstrap_script,

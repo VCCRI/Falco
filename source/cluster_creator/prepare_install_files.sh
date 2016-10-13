@@ -22,6 +22,9 @@ cd $tmp
 # STAR
 wget -O STAR-2.5.2a.tar.gz https://github.com/alexdobin/STAR/archive/2.5.2a.tar.gz
 
+# HISAT2
+wget -O hisat2-2.0.4.zip ftp://ftp.ccb.jhu.edu/pub/infphilo/hisat2/downloads/hisat2-2.0.4-Linux_x86_64.zip
+
 # subread 
 wget -O subread-1.5.0-p3-Linux-x86_64.tar.gz https://sourceforge.net/projects/subread/files/subread-1.5.0-p3/subread-1.5.0-p3-Linux-x86_64.tar.gz/download
 

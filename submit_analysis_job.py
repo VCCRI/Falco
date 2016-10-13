@@ -12,6 +12,7 @@ spark_extra_config = [("spark.memory.fraction", "0.9"),
                       ("spark.python.profile", "true"),
                       ("spark.python.worker.reuse", "false"),
                       ("spark.yarn.executor.memoryOverhead", "4096"),
+                      ("spark.driver.maxResultSize", "3g"),
                       ("spark.executor.extraJavaOptions",
                        "-Dlog4j.configuration=file:///etc/spark/conf/log4j.properties "
                        "-XX:+UseConcMarkSweepGC -XX:CMSInitiatingOccupancyFraction=30 "
@@ -33,7 +34,8 @@ def check_configuration(config):
         return False
 
     if not utility.check_config(config, "script_arguments", ["input_location", "output_location", "annotation_file",
-                                                             "region", "strand_specificity"]):
+                                                             "region", "strand_specificity", "aligner_tool",
+                                                             "counter_tool"]):
         return False
 
     if not utility.check_s3_region(config["script_arguments"]["region"]):
@@ -99,22 +101,22 @@ def build_command(config):
     command_args.append("-ss")
     command_args.append(config["script_arguments"]["strand_specificity"].upper())
 
+    command_args.append("-at={}".format(config["script_arguments"]["aligner_tool"]))
+    command_args.append("-ct={}".format(config["script_arguments"]["counter_tool"]))
+
     if "run_picard" in config["script_arguments"] and config["script_arguments"]["run_picard"].lower() == "true":
         command_args.append("--run_picard")
 
-    if "star_extra_args" in config["script_arguments"] and config["script_arguments"]["star_extra_args"].strip() != "":
-        command_args.append("-s")
-        command_args.append('{}'.format(config["script_arguments"]["star_extra_args"]))
+    if "aligner_extra_args" in config["script_arguments"] and config["script_arguments"]["aligner_extra_args"].strip() != "":
+        command_args.append('-s={}'.format(config["script_arguments"]["aligner_extra_args"]))
 
     if "counter_extra_args" in config["script_arguments"] and \
                     config["script_arguments"]["counter_extra_args"].strip() != "":
-        command_args.append("-c")
-        command_args.append('{}'.format(config["script_arguments"]["counter_extra_args"]))
+        command_args.append('-c={}'.format(config["script_arguments"]["counter_extra_args"]))
 
     if "picard_extra_args" in config["script_arguments"] and \
                     config["script_arguments"]["picard_extra_args"].strip() != "":
-        command_args.append("-p")
-        command_args.append('{}'.format(config["script_arguments"]["picard_extra_args"]))
+        command_args.append('-p={}'.format(config["script_arguments"]["picard_extra_args"]))
 
     command_args.append("-r")
     command_args.append(config["script_arguments"]["region"])

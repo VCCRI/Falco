@@ -208,7 +208,7 @@ while read f ; do
             <( paste - - - - < $fq_1 ) <( paste - - - - < $fq_2 ) | gzip --fast > $f
     else
         # single file
-        awk '{printf("%s%s",$0,(NR%4==0)?"\n":"\t")}' $fq_1 |gzip --fast > $f
+        awk '{printf("%s%s",$0,(NR%4==0)?"\n":"\t")}' $se_id |gzip --fast > $f
     fi
 
     # upload data & remove scratch directory

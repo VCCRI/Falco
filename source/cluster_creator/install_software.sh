@@ -32,6 +32,16 @@ fc=$( find -name "featureCounts"|grep bin )
 sr_path=${fc%featureCounts}
 ln -s $sr_path subread
 
+# Install HISAT2
+unzip hisat2*.zip
+hisat_dir=$( find . -maxdepth 1 -type d -name "hisat2*")
+ln -s $hisat_dir hisat
+
+# Install HTSeq
+sudo yum install python27-devel python27-numpy python27-matplotlib -y
+sudo pip install pysam
+sudo pip install htseq
+
 # Install samtools
 tar -xjf samtools*.tar.bz2
 sam_dir=$( find . -maxdepth 1 -type d -name "samtools*" )
@@ -39,6 +49,7 @@ pushd $sam_dir > /dev/null
 make
 sudo make install
 popd > /dev/null
+ln -s $sam_dir samtools
 
 # Install htslib
 hts_dir=$( find $sam_dir -maxdepth 1 -type d -name "htslib-*" )
@@ -78,6 +89,7 @@ popd > /dev/null
 mkdir /mnt/output
 
 # Install python dependencies for framework
+sudo yum install python27-Cython -y
 sudo pip install pandas
 sudo pip install boto3
 sudo python3 -m pip install boto3
