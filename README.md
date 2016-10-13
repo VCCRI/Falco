@@ -27,6 +27,7 @@ computational and storage resources, as well as access to commonly used software
 
 [Reference](https://github.com/VCCRI/Falco/wiki/Reference)
 
+[Customising Falco](https://github.com/VCCRI/Falco/wiki/Customisation)
 
 ## About the Author
 This software has been created as part of the research for University of New South Wales (Australia) PhD candidate
