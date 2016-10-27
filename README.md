@@ -1,15 +1,15 @@
 # _Falco_
-A Cloud-based Genetic Feature Quantification Analysis Tool
+A quick and flexible single-cell RNA-seq processing framework on the cloud
 
-Authors: Andrian Yang, Michael Troup, Joshua Ho
+Authors: Andrian Yang, Michael Troup, Peijie Lin, Joshua W. K. Ho
 
 Contact: j.ho@victorchang.edu.au
 
 Copyright © 2016, Victor Chang Cardiac Research Institute
 
 ## Synopsis
-_Falco_ is a software bundle that enables bioinformatic analysis of genetic data by utilising public cloud
-infrastructure.  The pipeline is suited to single cell RNA feature quantification analysis.
+_Falco_ is a software bundle that enables bioinformatic analysis of large-scale transcriptomic data by utilising public cloud
+infrastructure.  The framework is suited to single cell RNA feature quantification analysis.
 
 ## Motivation
 Computational analysis in this field has many challenges, including processing large volumes of data in the order of
