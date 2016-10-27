@@ -1,5 +1,4 @@
-# _Falco_
-A quick and flexible single-cell RNA-seq processing framework on the cloud
+# _Falco_: A quick and flexible single-cell RNA-seq processing framework on the cloud
 
 Authors: Andrian Yang, Michael Troup, Peijie Lin, Joshua W. K. Ho
 
