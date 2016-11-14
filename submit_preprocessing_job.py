@@ -219,7 +219,7 @@ if __name__ == "__main__":
 
     if cluster_id != "" and check_configuration(config):
         if (config["job_config"]["upload_script"] == "True" or
-                config["user_files"]["upload_user_files"] == "True"):
+                config["user_script_config"]["upload_user_files"] == "True"):
             config = upload_files_to_s3(config, parser_result.dry_run)
 
         # build the "-files" step option string - which is the list of

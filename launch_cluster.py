@@ -5,10 +5,14 @@ import boto3
 import utility
 from collections import OrderedDict
 
-global emr_configuration, emr_applications, cluster_config
+global emr_configuration, emr_applications, cluster_config, optional_instance_config
 emr_configuration = "emr_cluster.config"
 emr_applications = ["Hadoop", "Spark", "Ganglia"]
 cluster_config = ""  # ""source/cluster_creator/cluster_config.json"
+optional_instance_config = {"vpc_subnet": "Ec2SubnetId",
+                            "master_security_group": "EmrManagedMasterSecurityGroup",
+                            "slave_security_group": "EmrManagedSlaveSecurityGroup",
+                            "service_access_security_group": "ServiceAccessSecurityGroup"}
 
 
 def check_configuration(config):
@@ -72,6 +76,10 @@ def build_command(config):
         emr_arguments["Instances"]["Ec2KeyName"] = config["EMR_nodes"]["key_name"]
 
     emr_arguments["Instances"]["KeepJobFlowAliveWhenNoSteps"] = True
+
+    for instance_config in optional_instance_config:
+        if instance_config in config["EMR_nodes"] and config["EMR_nodes"][instance_config].strip() != "":
+            emr_arguments["Instances"][optional_instance_config[instance_config]] = config["EMR_nodes"][instance_config]
 
     emr_arguments["Steps"] = [
         {
