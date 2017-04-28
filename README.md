@@ -1,3 +1,4 @@
+<a href="url"><img src="http://bioinformatics.victorchang.edu.au/projects/falco/images/falco_logo.png" align="left" height="100" alt="Falco"></a>
 # _Falco_: A quick and flexible single-cell RNA-seq processing framework on the cloud
 
 Authors: Andrian Yang, Michael Troup, Peijie Lin, Joshua W. K. Ho
