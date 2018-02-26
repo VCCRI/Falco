@@ -5,6 +5,7 @@ import shutil
 from subprocess import Popen, PIPE
 from pyspark import SparkContext, SparkConf
 import pandas as pd
+import subprocess
 import boto3
 import re
 
@@ -436,10 +437,9 @@ if __name__ == "__main__":
     conf = SparkConf().setAppName("Spark-based RNA-seq Pipeline Multifile")
     sc = SparkContext(conf=conf)
 
-    s3_client = boto3.client('s3', region_name=parser_result.aws_region)
-
     if parser_result.input_dir.startswith("s3://"):  # From S3
 
+        s3_client = boto3.client('s3', region_name=parser_result.aws_region)
         # Get number of input files
         s3_paginator = s3_client.get_paginator('list_objects')
         input_bucket, key_prefix = parser_result.input_dir[5:].strip().split("/", 1)
@@ -464,7 +464,7 @@ if __name__ == "__main__":
 
         dir_count, file_count, size, path = hdfs_out.strip().split()
 
-        split_num = file_count
+        split_num = int(file_count)
 
     input_files = sc.wholeTextFiles(parser_result.input_dir, split_num)
 
@@ -489,9 +489,16 @@ if __name__ == "__main__":
     count_qc_summary = count_qc_summary.sort_index()
     count_qc_summary.to_csv(qc_report_file)
 
-    output_bucket, key_prefix = parser_result.output_dir.strip().strip("/")[5:].split("/", 1)
-    s3_client.upload_file(expressions_file, output_bucket, key_prefix + "/" + expressions_file)
-    s3_client.upload_file(qc_report_file, output_bucket, key_prefix + "/" + qc_report_file)
+    if parser_result.input_dir.startswith("s3://"):  # From S3
+        output_bucket, key_prefix = parser_result.output_dir.strip().strip("/")[5:].split("/", 1)
+        s3_client.upload_file(expressions_file, output_bucket, key_prefix + "/" + expressions_file)
+        s3_client.upload_file(qc_report_file, output_bucket, key_prefix + "/" + qc_report_file)
+    else:
+        subprocess.call(["hdfs", "dfs", "-mkdir", "-p", parser_result.output_dir.rstrip("/")])
+        subprocess.call(["hdfs", "dfs", "-put", expressions_file, parser_result.output_dir.rstrip("/") + "/"
+                         + expressions_file])
+        subprocess.call(["hdfs", "dfs", "-put", qc_report_file, parser_result.output_dir.rstrip("/") + "/"
+                         + qc_report_file])
 
     os.remove(expressions_file)
     os.remove(qc_report_file)

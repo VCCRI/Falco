@@ -69,13 +69,18 @@ do
 done
 # check that we have all the input parms
 # Note that --additional-files is optional
-for var in input output region user_script ; do
+for var in input output user_script ; do
    [ "${!var}" != "" ] || exit_msg "Missing input parameter: $var"
 done
 
 # check input/output to see if on s3 file system (or dfs)
 [ "${input:0:5}" == "s3://" ] || input_is_s3=false
 [ "${output:0:5}" == "s3://" ] || output_is_s3=false
+
+if $input_is_s3 ; then
+    var=region
+    [ "${!var}" != "" ] || exit_msg "Missing input parameter: $var"
+fi
 
 # create the output dir if using hdfs
 if ! $output_is_s3 ; then
@@ -154,7 +159,7 @@ while read f ; do
     if $input_is_s3 ; then
         aws s3 cp $input$file_sep$f . --region $region
     else
-        hdfs dfs get $input$file_sep$f . 
+        hdfs dfs -get $input$file_sep$f .
     fi
     [ $? -eq 0 ] || exit_msg "unable to download $f from $input"
     
@@ -218,7 +223,7 @@ while read f ; do
         aws s3 cp $f $output$file_sep$f --region $region
     else
         # assume non-s3 output is hdfs
-        hdfs dfs put $f $output$file_sep$f
+        hdfs dfs -put $f $output$file_sep$f
     fi
     [ $? -eq 0 ] || exit_msg "unable to upload $f to $output"
 

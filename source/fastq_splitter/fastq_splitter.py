@@ -14,6 +14,8 @@ max_split_size = 256 # 256 MB
 record_separator = "\t"
 pair_separator = "\t"
 
+TEMP_OUTPUT_FOLDER = "/mnt/output"
+
 
 def split_reads(file_list):
     global parser_result
@@ -30,7 +32,7 @@ def split_reads(file_list):
     else:
         output_prefix, suffix_extension = file_one.rsplit(".", 1)
 
-    output_dir = "/mnt/output/processing_" + output_prefix
+    output_dir = TEMP_OUTPUT_FOLDER + "/processing_" + output_prefix
 
     try:
         os.mkdir(output_dir)
@@ -45,11 +47,19 @@ def split_reads(file_list):
 
     split_file_names = []
     for file_name in file_list:
-        s3_client = boto3.client("s3", region_name=parser_result.s3_region)
-        try:
-            s3_client.download_file(s3_bucket, key_prefix + "/" + file_name, output_dir + "/" + file_name)
-        except:
-            raise ValueError(s3_bucket + ":" + key_prefix + "/" + file_name, output_dir + "/" + file_name)
+
+        if parser_result.input_dir.startswith("s3://"):
+            s3_client = boto3.client("s3", region_name=parser_result.s3_region)
+            try:
+                s3_client.download_file(s3_bucket, key_prefix + "/" + file_name, output_dir + "/" + file_name)
+            except:
+                raise ValueError(s3_bucket + ":" + key_prefix + "/" + file_name, output_dir + "/" + file_name)
+        else:
+            try:
+                subprocess.call(["hdfs", "dfs", "-get", parser_result.input_dir.rstrip("/") + "/" + file_name,
+                                 output_dir + "/" + file_name])
+            except:
+                raise ValueError("Unable to retrieve file from HDFS: " + key_prefix + "/" + file_name)
 
         split_file_names.append(output_dir + "/" + file_name)
 
