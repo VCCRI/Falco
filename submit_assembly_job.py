@@ -6,36 +6,42 @@ import sys
 from collections import OrderedDict
 
 global job_configuration, cluster_id, spark_extra_config
-job_configuration = "analysis_job.config"
+job_configuration = "assembly_job.config"
 cluster_id = ""
-spark_extra_config = [("spark.memory.fraction", "0.9"),
-                      ("spark.python.profile", "true"),
-                      ("spark.python.worker.reuse", "false"),
+spark_extra_config = [("spark.driver.maxResultSize", "0"),
+                      ("spark.memory.fraction", "0.95"),
+                      ("spark.memory.storageFraction", "0.05"),
+                      ("spark.python.worker.reuse", "False"),
+                      ("spark.python.worker.memory", "1024m"),
+                      ("spark.serializer", "org.apache.spark.serializer.KryoSerializer"),
                       ("spark.yarn.executor.memoryOverhead", "4096"),
-                      ("spark.driver.maxResultSize", "0"),
                       ("spark.executor.extraJavaOptions",
-                       "-Dlog4j.configuration=file:///etc/spark/conf/log4j.properties "
-                       "-XX:+UseConcMarkSweepGC -XX:CMSInitiatingOccupancyFraction=30 "
-                       "-XX:MaxHeapFreeRatio=50 -XX:+CMSClassUnloadingEnabled "
-                       "-XX:MaxPermSize=512M -XX:OnOutOfMemoryError='kill -9 %%p'"
-                       " -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/oom_dump_`date`.hprof")]
+                           "-Dlog4j.debug=true "
+                           "-Dlog4j.configuration=file:///etc/spark/conf/log4j.properties "
+                           "-XX:+UseConcMarkSweepGC -XX:CMSInitiatingOccupancyFraction=30 "
+                           "-XX:MaxHeapFreeRatio=50 -XX:+CMSClassUnloadingEnabled "
+                           "-XX:MaxPermSize=512M -XX:OnOutOfMemoryError='kill -9 %%p'"
+                           " -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/oom_dump_`date`.hprof"
+                      )
+                    ]
 
 
 def check_configuration(config):
-    if not utility.check_config(config, "job_config", ["name", "action_on_failure", "analysis_script",
-                                                       "analysis_script_s3_location", "upload_analysis_script"]):
+    if not utility.check_config(config, "job_config", ["name", "action_on_failure", "assembly_script",
+                                                       "assembly_script_s3_location", "upload_assembly_script"]):
         return False
 
-    if not utility.check_upload_config(config["job_config"], "upload_analysis_script", "analysis_script",
-                                       "analysis_script_local_location", "analysis_script_s3_location"):
+    if not utility.check_upload_config(config["job_config"], "upload_assembly_script", "assembly_script",
+                                       "assembly_script_local_location", "assembly_script_s3_location"):
         return False
 
     if not utility.check_config(config, "spark_config", ["driver_memory", "executor_memory"]):
         return False
 
     if not utility.check_config(config, "script_arguments", ["input_location", "output_location", "annotation_file",
-                                                             "region", "strand_specificity", "aligner_tool",
-                                                             "counter_tool"]):
+                                                             "enable_tiling", "enable_analysis", "region",
+                                                             "aligner_tool", "assembler_tool",
+                                                             "assembler_extra_args", "assembler_merge_extra_args"]):
         return False
 
     if not utility.check_s3_region(config["script_arguments"]["region"]):
@@ -88,36 +94,40 @@ def build_command(config):
         command_args.append("--" + spark_conf.replace("_", "-"))
         command_args.append(config["spark_config"][spark_conf])
 
-    command_args.append(config["job_config"]["analysis_script_s3_location"].rstrip("/") + "/" +
-                        config["job_config"]["analysis_script"])
+    command_args.append(config["job_config"]["assembly_script_s3_location"].rstrip("/") + "/" +
+                        config["job_config"]["assembly_script"])
 
     command_args.append("-i")
     command_args.append(config["script_arguments"]["input_location"])
     command_args.append("-o")
     command_args.append(config["script_arguments"]["output_location"])
-    command_args.append("-a")
-    command_args.append(config["script_arguments"]["annotation_file"])
-
-    command_args.append("-ss")
-    command_args.append(config["script_arguments"]["strand_specificity"].upper())
+    command_args.append("-a={}".format(config["script_arguments"]["annotation_file"]))
 
     command_args.append("-at={}".format(config["script_arguments"]["aligner_tool"]))
-    command_args.append("-ct={}".format(config["script_arguments"]["counter_tool"]))
-
-    if "run_picard" in config["script_arguments"] and config["script_arguments"]["run_picard"].lower() == "true":
-        command_args.append("--run_picard")
+    command_args.append("-as={}".format(config["script_arguments"]["assembler_tool"]))
 
     if "aligner_extra_args" in config["script_arguments"] and \
             config["script_arguments"]["aligner_extra_args"].strip() != "":
         command_args.append('-s={}'.format(config["script_arguments"]["aligner_extra_args"]))
 
-    if "counter_extra_args" in config["script_arguments"] and \
-                    config["script_arguments"]["counter_extra_args"].strip() != "":
-        command_args.append('-c={}'.format(config["script_arguments"]["counter_extra_args"]))
+    if "assembler_extra_args" in config["script_arguments"] and \
+            config["script_arguments"]["assembler_extra_args"].strip() != "":
+        command_args.append("-ag={}".format(config["script_arguments"]["assembler_extra_args"]))
 
-    if "picard_extra_args" in config["script_arguments"] and \
-                    config["script_arguments"]["picard_extra_args"].strip() != "":
-        command_args.append('-p={}'.format(config["script_arguments"]["picard_extra_args"]))
+    if "assembler_merge_extra_args" in config["script_arguments"] and \
+            config["script_arguments"]["assembler_merge_extra_args"].strip() != "":
+        command_args.append("-am={}".format(config["script_arguments"]["assembler_merge_extra_args"]))
+
+    if "assembler_use_reference" in config["script_arguments"] and \
+            config["script_arguments"]["assembler_use_reference"].lower() == "true":
+        command_args.append("-aur")
+
+    if "enable_tiling" in config["script_arguments"] and config["script_arguments"]["enable_tiling"].lower() == "true":
+        command_args.append("-et")
+
+    if "enable_analysis" in config["script_arguments"] and \
+            config["script_arguments"]["enable_analysis"].lower() == "true":
+        command_args.append("-ea")
 
     command_args.append("-r")
     command_args.append(config["script_arguments"]["region"])
@@ -130,7 +140,7 @@ def build_command(config):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Job submission script for spark-based RNA-seq Quantification')
+    parser = argparse.ArgumentParser(description='Job submission script for spark-based RNA-seq Transcript Assembly')
     parser.add_argument('--config', '-c', action="store", dest="job_config", help="Job configuration file")
     parser.add_argument('--cluster-id', '-id', action="store", dest="cluster_id", help="Cluster ID for submission")
     parser.add_argument('--dry-run', '-d', action="store_true", dest="dry_run",
@@ -150,10 +160,10 @@ if __name__ == "__main__":
         cluster_id = parser_result.cluster_id.strip()
 
     if cluster_id != "" and check_configuration(config):
-        if config["job_config"].get("upload_analysis_script", "False") == "True":
-            utility.upload_files_to_s3([(config["job_config"]["analysis_script"],
-                                         config["job_config"]["analysis_script_local_location"],
-                                         config["job_config"]["analysis_script_s3_location"])], parser_result.dry_run)
+        if config["job_config"].get("upload_assembly_script", "False") == "True":
+            utility.upload_files_to_s3([(config["job_config"]["assembly_script"],
+                                         config["job_config"]["assembly_script_local_location"],
+                                         config["job_config"]["assembly_script_s3_location"])], parser_result.dry_run)
 
         num_executors = calculate_num_executor(cluster_id, config["spark_config"]["executor_memory"])
         if num_executors < 0:

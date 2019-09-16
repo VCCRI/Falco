@@ -8,7 +8,7 @@ from collections import OrderedDict
 global emr_configuration, emr_applications, cluster_config, optional_instance_config
 emr_configuration = "emr_cluster.config"
 emr_applications = ["Hadoop", "Spark", "Ganglia"]
-cluster_config = ""  # ""source/cluster_creator/cluster_config.json"
+cluster_config = "source/cluster_creator/cluster_config.json"
 optional_instance_config = {"vpc_subnet": "Ec2SubnetId",
                             "master_security_group": "EmrManagedMasterSecurityGroup",
                             "slave_security_group": "EmrManagedSlaveSecurityGroup",
@@ -27,6 +27,14 @@ def check_configuration(config):
     if not utility.check_config(config, "EMR_nodes", ["key_name", "service_role", "instance_profile",
                                                       "master_instance_type", "master_instance_count",
                                                       "core_instance_type", "core_instance_count"]):
+        return False
+
+    release_version = config["EMR"]["release_label"].split("-")[-1].split(".")
+    major_release_version = int(release_version[0])
+    minor_release_version = int(release_version[1])
+    if config["EMR_nodes"].get("custom_ami_id", "").strip() != "" \
+            and not (major_release_version >= 5 and minor_release_version >= 7):
+        print("\033[31mERROR: \033[0mCustom AMI can only be used with EMR release >= 5.7")
         return False
 
     return True
@@ -118,6 +126,12 @@ def build_command(config):
     emr_arguments["VisibleToAllUsers"] = True
     emr_arguments["JobFlowRole"] = config["EMR_nodes"]["instance_profile"]
     emr_arguments["ServiceRole"] = config["EMR_nodes"]["service_role"]
+
+    if "custom_ami_id" in config["EMR_nodes"]:
+        emr_arguments["CustomAmiId"] = config["EMR_nodes"]["custom_ami_id"]
+
+        if "ebs_root_volume_size" in config["EMR_nodes"]:
+            emr_arguments["EbsRootVolumeSize"] = config["EMR_nodes"]["ebs_root_volume_size"]
 
     return emr_arguments
 

@@ -1,0 +1,12 @@
+{
+    "ImageId": "ami-6df1e514",
+    "KeyName": "[PRIVATE_KEY]",
+    "InstanceType": "[INSTANCE_TYPE]",
+    "Placement": {
+        "AvailabilityZone": "[AVAILABILITY_ZONE]"
+    },
+    "IamInstanceProfile": {
+        "Arn": "arn:aws:iam::[AWS_ACCOUNT_ID]:instance-profile/EMR_EC2_DefaultRole"
+    },
+    "UserData":""
+}

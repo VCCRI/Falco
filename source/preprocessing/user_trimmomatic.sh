@@ -24,7 +24,7 @@ fq_2="$2"
 [ -f $fq_1 ] || exit_msg "Unable to locate read 1 file: $fq_1"
 [ -f $fq_2 ] || exit_msg "Unable to locate read 1 file: $fq_2"
         
-trimmomatic="/mnt/app/trimmomatic-0.36.jar"
+trimmomatic="/app/trimmomatic-0.36.jar"
 fa="NexteraPE-PE.fa"
 [ -f $trimmomatic ] || exit_msg "Couldn't find trimmomatic: $trimmomatic"
 [ -f $fa ] || exit_msg "Couldn't find fa file: $fa"

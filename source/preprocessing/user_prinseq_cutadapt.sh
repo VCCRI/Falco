@@ -9,8 +9,8 @@
 
 # this file includes example code that could be used for paired-end data
 
-prinseq=/mnt/app/prinseq-lite.pl
-trim_galore=/mnt/app/trim_galore
+prinseq=/app/prinseq-lite.pl
+trim_galore=/app/trim_galore
 
 # function to deal with terminal errors
 exit_msg() {

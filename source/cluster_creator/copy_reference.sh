@@ -21,3 +21,4 @@ if [ "$zip_files" != "" ] ; then
 fi
 popd
 
+mkdir /mnt/output

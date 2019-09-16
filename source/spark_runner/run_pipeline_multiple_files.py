@@ -2,8 +2,10 @@ import argparse
 import os
 import shlex
 import shutil
+import sys
 from subprocess import Popen, PIPE
 from pyspark import SparkContext, SparkConf
+import pyspark.serializers
 import pandas as pd
 import subprocess
 import boto3
@@ -11,7 +13,10 @@ import re
 
 global parser_result
 
-APPLICATION_FOLDER = "/mnt/app"
+if sys.version > "3.4":
+    pyspark.serializers.protocol = 4
+
+APPLICATION_FOLDER = "/app"
 GENOME_REFERENCES_FOLDER = "/mnt/ref"
 TEMP_OUTPUT_FOLDER = "/mnt/output"
 
@@ -106,13 +111,13 @@ def align_reads_star(sample_name, file_names, alignment_output_dir):
 
     if aligner_process.returncode != 0:
         raise ValueError("STAR failed to complete (Non-zero return code)!\n"
-                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out,
-                                                                                  std_err=aligner_error))
+                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                  std_err=aligner_error.decode("utf8")))
 
-    if aligner_error.strip() != "" or not os.path.isfile(alignment_output_dir + "/Log.final.out"):
+    if aligner_error.decode("utf8").strip() != "" or not os.path.isfile(alignment_output_dir + "/Log.final.out"):
         raise ValueError("STAR failed to complete (No output file is found)!\n"
-                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out,
-                                                                                  std_err=aligner_error))
+                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                  std_err=aligner_error.decode("utf8")))
 
     print('Completed reads alignment')
 
@@ -140,7 +145,7 @@ def align_reads_hisat(sample_name, file_names, alignment_output_dir):
     if paired_read:
         fastq_file_args = "-1 {} -2 {}".format(*file_names)
     else:
-        fastq_file_args = "-U {}".format()
+        fastq_file_args = "-U {}".format(*file_names)
 
     aligner_args = "{app_folder}/hisat/hisat2 -p 4 --tmo {aligner_extra_args} -x {index_folder}/hisat2.index " \
                    "{fastq_file_names} -S {output_folder}/output.sam".\
@@ -155,12 +160,12 @@ def align_reads_hisat(sample_name, file_names, alignment_output_dir):
 
     if aligner_process.returncode != 0:
         raise ValueError("HISAT2 failed to complete (Non-zero return code)!\n"
-                         "HISAT2 stdout: {std_out} \nHISAT2 stderr: {std_err}".format(std_out=aligner_out,
-                                                                                      std_err=aligner_error))
+                         "HISAT2 stdout: {std_out} \nHISAT2 stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                      std_err=aligner_error.decode("utf8")))
     print('Completed reads alignment')
 
     aligner_qc_output = []
-    for line in aligner_error.split("\n"):
+    for line in aligner_error.decode("utf8").split("\n"):
         line = line.strip()
 
         # Check if line only give percentage info (we will ignore this line)
@@ -175,6 +180,39 @@ def align_reads_hisat(sample_name, file_names, alignment_output_dir):
                 aligner_qc_output.append((sample_name + "\t" + "QC_HISAT_" + metric_text.replace(" ", "_"),
                                           int(metric_value)))
 
+    sam_file_name_output = "output.sam"
+
+    return sam_file_name_output, aligner_qc_output
+
+
+def align_reads_subread(sample_name, file_names, alignment_output_dir):
+    # If paired read flag is required
+    paired_read = True if len(file_names) == 2 else False
+
+    print("Aligning reads...")
+    if paired_read:
+        fastq_file_args = "-r {} -R {}".format(*file_names)
+    else:
+        fastq_file_args = "-r {}".format(*file_names)
+
+    aligner_args = "{app_folder}/subread/subread-align -T 4 -t 0 --SAMoutput -u {aligner_extra_args} " \
+                   "-i {index_folder}/genome {fastq_file_names} -o {output_folder}/output.sam".\
+        format(app_folder=APPLICATION_FOLDER,
+               aligner_extra_args="" if parser_result.aligner_extra_args is None else parser_result.aligner_extra_args,
+               index_folder=GENOME_REFERENCES_FOLDER + "/subread_index",
+               fastq_file_names=fastq_file_args,
+               output_folder=alignment_output_dir)
+    print("Command: " + aligner_args)
+    aligner_process = Popen(shlex.split(aligner_args), stdout=PIPE, stderr=PIPE)
+    aligner_out, aligner_error = aligner_process.communicate()
+
+    if aligner_process.returncode != 0:
+        raise ValueError("Subread failed to complete (Non-zero return code)!\n"
+                         "Subread stdout: {std_out} \nSubread stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                        std_err=aligner_error.decode("utf8")))
+    print('Completed reads alignment')
+
+    aligner_qc_output = []
     sam_file_name_output = "output.sam"
 
     return sam_file_name_output, aligner_qc_output
@@ -203,7 +241,7 @@ def count_reads_featurecount(sample_name, aligned_output_filepath, paired_reads,
         raise ValueError("featureCount failed to complete! (Non-zero return code)\nCounter stdout: {} \n"
                          "Counter stderr: {}".format(counter_out, counter_error))
 
-    if "[Errno" in counter_error.strip() or "error" in counter_error.strip().lower():
+    if "[Errno" in counter_error.decode("utf8").strip() or "error" in counter_error.decode("utf8").strip().lower():
         raise ValueError("featureCount failed to complete! (Error)\nCounter stdout: {} \nCounter stderr: {}".
                          format(counter_out, counter_error))
 
@@ -252,13 +290,13 @@ def count_reads_htseq(sample_name, aligned_output_filepath, paired_reads, counte
         raise ValueError("HTSeq failed to complete! (Non-zero return code)\nCounter stdout: {} \nCounter stderr: {}".
                          format(counter_out, counter_error))
 
-    if "[Errno" in counter_error.strip():
+    if "[Errno" in counter_error.decode("utf8").strip():
         raise ValueError("HTSeq failed to complete! (Error)\nCounter stdout: {} \nCounter stderr: {}".
                          format(counter_out, counter_error))
 
     counter_output = []
     counter_qc_output = []
-    for gene_count in counter_out.strip().split("\n"):
+    for gene_count in counter_out.decode("utf8").strip().split("\n"):
         if len(gene_count.strip().split()) == 0:
             print(gene_count)
         gene, count = gene_count.strip().split()
@@ -270,6 +308,71 @@ def count_reads_htseq(sample_name, aligned_output_filepath, paired_reads, counte
 
     return counter_output, counter_qc_output
 
+#################################
+#  Counting without alignment output
+#################################
+
+
+def count_reads_star(sample_name, file_names, alignment_output_dir):
+    # If paired read flag is required
+    # paired_read = True if len(file_names) == 2 else False
+
+    print("Counting reads...")
+    aligner_args = "{app_folder}/STAR/STAR --runThreadN 4 {aligner_extra_args} --genomeDir {index_folder} " \
+                   "--readFilesIn {fastq_file_names} --outFileNamePrefix {output_folder} --quantMode GeneCounts".\
+        format(app_folder=APPLICATION_FOLDER,
+               aligner_extra_args="" if parser_result.aligner_extra_args is None else parser_result.aligner_extra_args,
+               index_folder=GENOME_REFERENCES_FOLDER + "/star_index",
+               fastq_file_names=" ".join(file_names),
+               output_folder=alignment_output_dir + "/")
+    print("Command: " + aligner_args)
+    aligner_process = Popen(shlex.split(aligner_args), stdout=PIPE, stderr=PIPE)
+    aligner_out, aligner_error = aligner_process.communicate()
+
+    if aligner_process.returncode != 0:
+        raise ValueError("STAR counting failed to complete (Non-zero return code)!\n"
+                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                  std_err=aligner_error.decode("utf8")))
+
+    if aligner_error.decode("utf8").strip() != "" or not os.path.isfile(alignment_output_dir + "/Log.final.out"):
+        raise ValueError("STAR counting failed to complete (No output file is found)!\n"
+                         "STAR stdout: {std_out} \nSTAR stderr: {std_err}".format(std_out=aligner_out.decode("utf8"),
+                                                                                  std_err=aligner_error.decode("utf8")))
+
+    print('Completed read counts')
+
+    qc_output = []
+    with open(alignment_output_dir + "/Log.final.out") as aligner_qc:
+        for line in aligner_qc:
+            parts = line.strip().split("\t")
+            if len(parts) < 2:
+                continue
+            aligner_metric_name, aligner_metric_value = parts[0].strip("| "), parts[1].strip()
+            if aligner_metric_name.lower() in star_collected_metrics:
+                qc_output.append((sample_name + "\t" + "QC_STAR_" + aligner_metric_name.replace(" ", "_"),
+                                  int(aligner_metric_value)))
+
+    counter_output = []
+    with open(alignment_output_dir + "/ReadsPerGene.out.tab") as f:
+        # STAR produces 3 counts for unstranded, first strand and second strand
+        count_index = 1
+        if parser_result.strand_specificity == "FIRST_READ_TRANSCRIPTION_STRAND":
+            count_index = 2
+        elif parser_result.strand_specificity == "SECOND_READ_TRANSCRIPTION_STRAND":
+            count_index = 3
+
+        for index, line in enumerate(f):
+            line = line.strip().split()
+
+            if len(line) == 0:
+                print(line)
+
+            if line[0].startswith("N_"):  # QC output
+                qc_output.append((sample_name + "\t" + "QC_STAR-count_" + line[0].lstrip("N_"), int(line[count_index])))
+            else:
+                counter_output.append((sample_name + "\t" + line[0], int(line[count_index])))
+
+    return counter_output, qc_output
 
 #################################
 #  Picard tools
@@ -288,7 +391,8 @@ def run_picard(sample_name, aligned_output_filepath, picard_output_dir):
 
     if not os.path.isfile(picard_output_dir + "/output.RNA_Metrics"):
         raise ValueError("Picard tools failed to complete (No output file is found)!\n"
-                         "Picard tools stdout: {} \nPicard tools stderr: {}".format(picard_out, picard_error))
+                         "Picard tools stdout: {} \nPicard tools stderr: {}".format(picard_out.decode("utf8"),
+                                                                                    picard_error.decode("utf8")))
 
     picard_qc_output = []
     with open(picard_output_dir + "/output.RNA_Metrics") as picard_qc:
@@ -352,8 +456,15 @@ def alignment_count_step(keyval):
     # Output: [sample_name\tgene, count] as [key,val]
     global parser_result, star_collected_metrics, picard_collected_metrics
 
+    prefix_regex = r"(.*_part[0-9]*)\."
+
     file_name, file_content = keyval
-    prefix = file_name.rstrip("/").split("/")[-1].split(".")[0]
+    prefix_match = re.findall(prefix_regex, file_name.rstrip("/").split("/")[-1])
+
+    if len(prefix_match) != 1:
+        raise ValueError("Filename can not be resolved (invalid, pattern mismatch): {}".format(file_name))
+
+    prefix = prefix_match[0]
     sample_name = prefix.rsplit("_part", 1)[0]
 
     alignment_dir = TEMP_OUTPUT_FOLDER + "/alignment_" + prefix
@@ -374,31 +485,45 @@ def alignment_count_step(keyval):
     except:
         print('Alignment output directory {} exist.'.format(alignment_output_dir))
 
-    if parser_result.aligner.lower() == "star":
-        aligned_sam_output, aligner_qc_output = align_reads_star(sample_name, split_file_names, alignment_output_dir)
-    elif parser_result.aligner.lower() == "hisat" or parser_result.aligner.lower() == "hisat2":
-        aligned_sam_output, aligner_qc_output = align_reads_hisat(sample_name, split_file_names, alignment_output_dir)
-    else:
-        print("Aligner specified is not yet supported. Defaulting to STAR")
-        aligned_sam_output, aligner_qc_output = align_reads_star(sample_name, split_file_names, alignment_output_dir)
+    aligner_qc_output = []
+    counter_qc_output = []
+    aligned_output_filepath = ""
 
-    aligned_output_filepath = "{}/{}".format(alignment_output_dir.rstrip("/"), aligned_sam_output)
+    if parser_result.aligner.lower() == "star" and parser_result.counter.lower() == "star":
+        counter_output, aligner_qc_output = count_reads_star(sample_name, split_file_names, alignment_output_dir)
 
-    if parser_result.counter.lower() == "featurecount" or parser_result.counter.lower() == "featurecounts":
-        counter_output, counter_qc_output = count_reads_featurecount(sample_name, aligned_output_filepath, paired_reads,
-                                                                     alignment_output_dir)
-    elif parser_result.counter.lower() == "htseq":
-        counter_output, counter_qc_output = count_reads_htseq(sample_name, aligned_output_filepath, paired_reads,
-                                                                  alignment_output_dir)
     else:
-        print("Counter specified is not yet supported. Defaulting to featureCount")
-        counter_output, counter_qc_output = count_reads_featurecount(sample_name, aligned_output_filepath, paired_reads,
+        if parser_result.aligner.lower() == "star":
+            aligned_sam_output, aligner_qc_output = align_reads_star(sample_name, split_file_names,
                                                                      alignment_output_dir)
+        elif parser_result.aligner.lower() == "hisat" or parser_result.aligner.lower() == "hisat2":
+            aligned_sam_output, aligner_qc_output = align_reads_hisat(sample_name, split_file_names,
+                                                                      alignment_output_dir)
+        elif parser_result.aligner.lower() == "subread":
+            aligned_sam_output, aligner_qc_output = align_reads_subread(sample_name, split_file_names,
+                                                                        alignment_output_dir)
+        else:
+            print("Aligner specified is not yet supported. Defaulting to STAR")
+            aligned_sam_output, aligner_qc_output = align_reads_star(sample_name, split_file_names,
+                                                                     alignment_output_dir)
+
+        aligned_output_filepath = "{}/{}".format(alignment_output_dir.rstrip("/"), aligned_sam_output)
+
+        if parser_result.counter.lower() == "featurecount" or parser_result.counter.lower() == "featurecounts":
+            counter_output, counter_qc_output = count_reads_featurecount(sample_name, aligned_output_filepath,
+                                                                         paired_reads, alignment_output_dir)
+        elif parser_result.counter.lower() == "htseq":
+            counter_output, counter_qc_output = count_reads_htseq(sample_name, aligned_output_filepath, paired_reads,
+                                                                      alignment_output_dir)
+        else:
+            print("Counter specified is not yet supported. Defaulting to featureCount")
+            counter_output, counter_qc_output = count_reads_featurecount(sample_name, aligned_output_filepath,
+                                                                         paired_reads, alignment_output_dir)
 
     counter_output.extend(aligner_qc_output)
     counter_output.extend(counter_qc_output)
 
-    if parser_result.run_picard:
+    if parser_result.run_picard and aligned_output_filepath != "":
         picard_qc_output = run_picard(sample_name, aligned_output_filepath, alignment_output_dir)
         counter_output.extend(picard_qc_output)
 
@@ -407,9 +532,10 @@ def alignment_count_step(keyval):
 
 
 if __name__ == "__main__":
+    print("pickle protocol {}".format(pyspark.serializers.protocol))
     global parser_result
 
-    parser = argparse.ArgumentParser(description='Spark-based RNA-seq Pipeline')
+    parser = argparse.ArgumentParser(description='Spark-based RNA-seq Pipeline Quantification')
     parser.add_argument('--input', '-i', action="store", dest="input_dir", help="Input directory - HDFS or S3")
     parser.add_argument('--output', '-o', action="store", dest="output_dir", help="Output directory - HDFS or S3")
     parser.add_argument('--annotation', '-a', action="store", dest="annotation_file",
@@ -419,11 +545,11 @@ if __name__ == "__main__":
                         , default="NONE")
     parser.add_argument('--run_picard', '-rp', action="store_true", dest="run_picard", help="Run picard")
     parser.add_argument('--aligner_tools', '-at', action="store", dest="aligner", nargs='?',
-                        help="Aligner to be used (STAR|HISAT2)", default="STAR")
+                        help="Aligner to be used (STAR|HISAT2|Subread)", default="STAR")
     parser.add_argument('--aligner_extra_args', '-s', action="store", dest="aligner_extra_args", nargs='?',
                         help="Extra argument to be passed to alignment tool", default="")
     parser.add_argument('--counter_tools', '-ct', action="store", dest="counter", nargs='?',
-                        help="Counter to be used (featureCount|StringTie)", default="featureCount")
+                        help="Counter to be used (featureCount|StringTie|STAR)", default="featureCount")
     parser.add_argument('--counter_extra_args', '-c', action="store", dest="counter_extra_args", nargs='?',
                         help="Extra argument to be passed to quantification tool", default="")
     parser.add_argument('--picard_extra_args', '-p', action="store", dest="picard_extra_args", nargs='?',
@@ -434,11 +560,10 @@ if __name__ == "__main__":
 
     split_num = 0
 
-    conf = SparkConf().setAppName("Spark-based RNA-seq Pipeline Multifile")
+    conf = SparkConf().setAppName("Spark-based RNA-seq Pipeline Quantification")
     sc = SparkContext(conf=conf)
 
     if parser_result.input_dir.startswith("s3://"):  # From S3
-
         s3_client = boto3.client('s3', region_name=parser_result.aws_region)
         # Get number of input files
         s3_paginator = s3_client.get_paginator('list_objects')
