@@ -381,7 +381,7 @@ def count_reads_star(sample_name, file_names, alignment_output_dir):
 
 def run_picard(sample_name, aligned_output_filepath, picard_output_dir):
     print("Getting alignment metrics...")
-    picard_args = "java8 -jar {}/picard-tools/picard.jar CollectRnaSeqMetrics I={} O={}/output.RNA_Metrics " \
+    picard_args = "java8 -jar {}/picard-tool/picard.jar CollectRnaSeqMetrics I={} O={}/output.RNA_Metrics " \
                   "REF_FLAT={}/refFlat.txt STRAND={} {}". \
         format(APPLICATION_FOLDER, aligned_output_filepath, picard_output_dir, GENOME_REFERENCES_FOLDER + "/genome_ref",
                parser_result.strand_specificity, parser_result.picard_extra_args)
